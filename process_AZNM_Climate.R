@@ -1,6 +1,6 @@
 # AZ-NM Climate Time series analysis for fire-climate study
 # MAC 12/27/23
-# code adapted from regionsMTBS_SWClimate.R
+# code adapted from regionsMTBS_SWClimate.R ---
 
 # map layers
 #states <- raster::getData('GADM', country='United States', level=1)

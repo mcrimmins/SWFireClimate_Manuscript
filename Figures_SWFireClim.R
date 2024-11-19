@@ -3,7 +3,7 @@
 # MAC 3/5/24
 # WIN11 RStudio Version 11/12/24
 
-##### analyze fires and mtbs fireperim climate ----
+##### analyze fires and mtbs fireperim climate -------
 library(tidyverse)
 library(ggplot2)
 library(cowplot)
