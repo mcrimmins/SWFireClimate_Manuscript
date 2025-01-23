@@ -192,6 +192,13 @@ temp<-temp %>%
   summarise(nFires=n(),
             totAc=sum(BurnBndAc))%>%
   ungroup()
+# proportion within group
+# temp2<-temp %>%
+#   group_by(GROUPVEG) %>%  # US_L3NAME
+#   mutate(nFires_perc_veg=100 *nFires/sum(nFires),
+#          totAc_perc_veg=100 *totAc/sum(totAc))
+#
+
 temp<-temp%>%
   mutate(nFires_perc=100 *(nFires/sum(nFires)),
          totAc_perc=100 *(totAc/sum(totAc)))
@@ -206,6 +213,7 @@ totAcTable<-temp[,c("GROUPVEG","US_L3NAME","totAc")] %>%
     values_from = totAc
   )
 totAcTable$totalAC<-rowSums(totAcTable[,2:4], na.rm = TRUE)
+  totAcTable2<-totAcTable # save copy for alternate table version
 totAcTable$US_L3NAME<-as.character(totAcTable$US_L3NAME)
 totAcTable[is.na(totAcTable)] <- 0
 
@@ -224,6 +232,42 @@ library(kableExtra)
 kableExtra::kbl(totAcTable, align = "c") %>%
   kable_classic(full_width = F, html_font = "Cambria") %>%
   save_kable(file = "./figs/table_1.png")
+
+### v2 with column proportions
+totAcTable2[is.na(totAcTable2)] <- 0
+#totAcTable2<-rbind(totAcTable2,c("Total",colSums(totAcTable2[,c(2:5)], na.rm = TRUE)))
+colnames(totAcTable2)<-c("Ecoregion","Conifer","Grassland","Shrubland","Total")
+
+df_proportions <- totAcTable2 %>%
+  mutate(
+    Conifer_prop = as.numeric(Conifer) / sum(as.numeric(Conifer)),
+    Grassland_prop = as.numeric(Grassland) / sum(as.numeric(Grassland)),
+    Shrubland_prop = as.numeric(Shrubland) / sum(as.numeric(Shrubland)),
+    totalAC_prop = as.numeric(Total) / sum(as.numeric(Total))
+  ) %>%
+  mutate(
+    Conifer = paste0(format(Conifer, big.mark = ","), " (", round(Conifer_prop * 100, 1), "%)"),
+    Grassland = paste0(format(Grassland, big.mark = ","), " (", round(Grassland_prop * 100, 1), "%)"),
+    Shrubland = paste0(format(Shrubland, big.mark = ","), " (", round(Shrubland_prop * 100, 1), "%)"),
+    Total = paste0(format(Total, big.mark = ","), " (", round(totalAC_prop * 100, 1), "%)")
+  ) %>%
+  select(Ecoregion, Conifer, Grassland, Shrubland, Total)
+
+# Create the totals row
+totals_row <- data.frame(
+  Ecoregion = "Total",
+  Conifer = paste0(format(sum(totAcTable2$Conifer), big.mark = ","), " (", round(sum(totAcTable2$Conifer) / sum(totAcTable2$Total) * 100, 1), "%)"),
+  Grassland = paste0(format(sum(totAcTable2$Grassland), big.mark = ","), " (", round(sum(totAcTable2$Grassland) / sum(totAcTable2$Total) * 100, 1), "%)"),
+  Shrubland = paste0(format(sum(totAcTable2$Shrubland), big.mark = ","), " (", round(sum(totAcTable2$Shrubland) / sum(totAcTable2$Total) * 100, 1), "%)"),
+  Total = paste0(format(sum(totAcTable2$Total), big.mark = ","), " (", round(sum(totAcTable2$Total) / sum(totAcTable2$Total) * 100, 1), "%)")
+)
+df_proportions <- rbind(df_proportions, totals_row)
+
+library(kableExtra)
+kableExtra::kbl(df_proportions, align = "c") %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  save_kable(file = "./figs/table_1v2.html")
+webshot2::webshot("./figs/table_1v2.html", "./figs/table_1v2.png", delay = 5)
 ######
 
 
@@ -263,9 +307,9 @@ temp2<- gather(temp2, var, value, nFires:ratio,-GROUPVEG, factor_key=TRUE)
 temp5<-temp2 # save for later
 
 # set variable names
-temp2$var<-forcats::fct_recode(temp2$var,"Number of Fires"="nFires", "Total Fire Area (ha)"="totAc", "Avg Fire Size (ha)"="ratio")
+temp2$var<-forcats::fct_recode(temp2$var,"Number of Fires"="nFires", "Total Area Burned (ha)"="totAc", "Avg Fire Size (ha)"="ratio")
 # reorder factors
-temp2$var<-relevel(temp2$var,"Total Fire Area (ha)")
+temp2$var<-relevel(temp2$var,"Total Area Burned (ha)")
 
 # evaluate trends
 trends1<- subset(temp2, GROUPVEG %in% c("Conifer","Grassland","Shrubland","All")) %>% group_by(GROUPVEG,var) %>%
@@ -291,12 +335,21 @@ p<-ggplot(subset(temp2, GROUPVEG %in% c("Conifer","Grassland","Shrubland","All")
         axis.title.y=element_blank())
 p
 
-save_plot("./figs/F3_timeSeries.png", p, base_height = 7, base_aspect_ratio = 1.25, bg = "white")
+save_plot("./figs/F3_timeSeries.png", p, base_height = 5.5, base_aspect_ratio = 1.5, bg = "white")
+
+temp2<-subset(temp3, GROUPVEG %in% c("Conifer") & year<=2002)
+mean(temp2$nFires)
+mean(temp2$totAc)
+mean(temp2$ratio)  
+temp2<-subset(temp3, GROUPVEG %in% c("Conifer") & year>2002)
+mean(temp2$nFires)
+mean(temp2$totAc)
+mean(temp2$ratio) 
 
 temp2<-subset(temp3, GROUPVEG %in% c("Shrubland") & year<=2002)
 mean(temp2$nFires)
 mean(temp2$totAc)
-mean(temp2$ratio)  
+mean(temp2$ratio) 
 temp2<-subset(temp3, GROUPVEG %in% c("Shrubland") & year>2002)
 mean(temp2$nFires)
 mean(temp2$totAc)
@@ -335,7 +388,7 @@ p<-ggplot()+
   theme_classic()+
   theme(legend.position="bottom")
 
-save_plot("./figs/F2_annTimeSeries.png", p, base_height = 7, base_aspect_ratio = 1.75, bg = "white")
+save_plot("./figs/F2_annTimeSeries.png", p, base_height = 5, base_aspect_ratio = 1.75, bg = "white")
 
 summary(tempClim)
 
@@ -397,13 +450,15 @@ p<-ggplot(topYears2, aes(x=GROUPVEG,y=totAc_perc_veg, group=id,label=as.factor(y
   geom_text(
     angle=90,
     position=position_dodge(width=0.9),
-    hjust=-0.05
+    hjust=-0.05, size=2.5,
   )+
   scale_y_continuous(limits=c(0,20), breaks=seq(0,20,by=5))+
   ggtitle("Top 20 AMJ Fire Years - contribution to period of record total area burned")+
+  ylab("Percent of total area burned")+
+  xlab("Fire-Vegetation Type")+
   theme_bw()
 
-save_plot("./figs/SuppF1_topYears.png", p, base_height = 7, base_aspect_ratio = 1.75, bg = "white")
+save_plot("./figs/SuppF1_topYears.png", p, base_height = 5, base_aspect_ratio = 1.75, bg = "white")
 ##### 
 
 # top 3 years summary stats
@@ -494,7 +549,7 @@ p<-ggplot(data=subset(temp,var %in% c("SPI-3","VPD-max")), #"tdmeanZ","tmaxZ"
   geom_text(data=subset(wTest,var %in% c("SPI-3","VPD-max")), #"tdmeanZ","tmaxZ"
             aes(as.factor(seq),3.5,label=sig), position = position_dodge(width = 0.6), size=10)
 
-save_plot("./figs/F4_boxPlots.png", p, base_height = 7, base_aspect_ratio = 1.75, bg = "white")
+save_plot("./figs/F4_boxPlots.png", p, base_height = 5.5, base_aspect_ratio = 1.75, bg = "white")
 
 tempX<-subset(temp,var %in% c("SPI-3","VPD-max"))
 tempX<-tempX %>% group_by(groupVeg,seq,fireSeas,topX,var) %>%
@@ -502,3 +557,10 @@ tempX<-tempX %>% group_by(groupVeg,seq,fireSeas,topX,var) %>%
 
 #### write out data files for Zenodo repository
 
+# use fireClim df
+fireClimRepo<-fireClim[,c("dates","month","eco1","seas","seq",
+                          "seasSeq","fireSeas","fireSize",
+                          "fireName","fireYear","ecoName",
+                          "groupVeg","prec","vpdmax","spi3","vpdmaxZ")]
+                          
+write.csv(fireClimRepo, "./data/AZNM_1984_2021_MTBS_seasonal_fire_climate.csv", row.names = FALSE)
