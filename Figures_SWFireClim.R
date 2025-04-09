@@ -228,10 +228,12 @@ combined_df <- map2_df(totAcTable[,2:5], propAcTable[,2:5], ~ paste(.x, .y, sep 
 totAcTable<-cbind(totAcTable$US_L3NAME, combined_df)
 colnames(totAcTable)[1]<-"Ecoregion"
 
-library(kableExtra)
-kableExtra::kbl(totAcTable, align = "c") %>%
-  kable_classic(full_width = F, html_font = "Cambria") %>%
-  save_kable(file = "./figs/table_1.png")
+# library(kableExtra)
+# kableExtra::kbl(totAcTable, align = "c") %>%
+#   kable_classic(full_width = F, html_font = "Cambria") %>%
+#   save_kable(file = "./figs/table_1.png")
+# write to excel table
+write.csv(totAcTable, "./figs/table_1.csv", row.names = FALSE)
 
 ### v2 with column proportions
 totAcTable2[is.na(totAcTable2)] <- 0
@@ -263,13 +265,14 @@ totals_row <- data.frame(
 )
 df_proportions <- rbind(df_proportions, totals_row)
 
-library(kableExtra)
-kableExtra::kbl(df_proportions, align = "c") %>%
-  kable_classic(full_width = F, html_font = "Cambria") %>%
-  save_kable(file = "./figs/table_1v2.html")
-webshot2::webshot("./figs/table_1v2.html", "./figs/table_1v2.png", delay = 5)
+# library(kableExtra)
+# kableExtra::kbl(df_proportions, align = "c") %>%
+#   kable_classic(full_width = F, html_font = "Cambria") %>%
+#   save_kable(file = "./figs/table_1v2.html")
+# webshot2::webshot("./figs/table_1v2.html", "./figs/table_1v2.png", delay = 5)
+# write to csv
+write.csv(df_proportions, "./figs/table_1v2.csv", row.names = FALSE)
 ######
-
 
 
 ##### Time series by veg type FIG 3 ----
@@ -335,7 +338,7 @@ p<-ggplot(subset(temp2, GROUPVEG %in% c("Conifer","Grassland","Shrubland","All")
         axis.title.y=element_blank())
 p
 
-save_plot("./figs/F3_timeSeries.png", p, base_height = 5.5, base_aspect_ratio = 1.5, bg = "white")
+save_plot("./figs/F3_timeSeries.png", p, base_height = 4.75, base_aspect_ratio = 1.5, bg = "white")
 
 temp2<-subset(temp3, GROUPVEG %in% c("Conifer") & year<=2002)
 mean(temp2$nFires)
@@ -388,7 +391,7 @@ p<-ggplot()+
   theme_classic()+
   theme(legend.position="bottom")
 
-save_plot("./figs/F2_annTimeSeries.png", p, base_height = 5, base_aspect_ratio = 1.75, bg = "white")
+save_plot("./figs/F2_annTimeSeries.png", p, base_height = 4, base_aspect_ratio = 1.75, bg = "white")
 
 summary(tempClim)
 
@@ -480,12 +483,16 @@ otherYears<- otherYears %>% group_by(GROUPVEG) %>%
   summarise(avgAc=round(mean(totAc, na.rm=TRUE),0),
             sdAc=round(sd(totAc, na.rm=TRUE),0),
             avgNfires=round(mean(nFires, na.rm=TRUE),0),
-            sdNfires=round(sd(nFires, na.rm = TRUE),0))
+            sdNfires=round(sd(nFires, na.rm = TRUE),0),
+            totAc=sum(totAc, na.rm = NA),
+            totnFires=sum(nFires, na.rm = NA),
+            fireSize=sum(totAc)/sum(nFires))
+otherYears
 
 # make top years table
 topYrsTable<-topYears[,c("GROUPVEG","year","nFires","totAc")]
 colnames(topYrsTable)<-c("Vegetation","Year","Num of Fires","Total Area Burned (ha)")
-library(kableExtra)
+#library(kableExtra)
 # kableExtra::kbl(topYrsTable, align = "c") %>%
 #   #kable_paper(full_width = F) %>%
 #   kable_paper("striped", full_width = F) %>%
@@ -493,10 +500,38 @@ library(kableExtra)
 #   collapse_rows(columns = 1:1, valign = "top") %>%
 #   kable_styling() %>%
 #   save_kable(file = "table_1.png")
-kableExtra::kbl(topYrsTable, align = "c") %>%
-  kable_classic(full_width = F, html_font = "Cambria") %>%
-  save_kable(file = "./figs/table_2.html")
-webshot2::webshot("./figs/table_2.html", "./figs/table_2.png", delay = 5)
+# kableExtra::kbl(topYrsTable, align = "c") %>%
+#   kable_classic(full_width = F, html_font = "Cambria") %>%
+#   save_kable(file = "./figs/table_2.html")
+# webshot2::webshot("./figs/table_2.html", "./figs/table_2.png", delay = 5)
+# write to csv
+write.csv(topYrsTable, "./figs/table_2.csv", row.names = FALSE)
+
+# save key stats into a workbook
+# write tables to excel file
+library(openxlsx)
+wb <- createWorkbook()
+
+# Add multiple sheets (tabs) with different tables
+addWorksheet(wb, "AllAMJData")
+writeData(wb, "AllAMJData", temp4)  # Replace `table1` with your actual table
+
+addWorksheet(wb, "Top3AMJYears")
+writeData(wb, "Top3AMJYears", topYears)  # Replace `table2` with your actual table
+
+addWorksheet(wb, "TotalAMJ")
+writeData(wb, "TotalAMJ", tempAllAMJ)  # Replace `table2` with your actual table
+
+addWorksheet(wb, "TotalTop3AMJ")
+writeData(wb, "TotalTop3AMJ", tempTop3)  # Replace `table2` with your actual table
+
+addWorksheet(wb, "TotalNonExtremeAMJ")
+writeData(wb, "TotalNonExtremeAMJ", otherYears)  # Replace `table2` with your actual table
+
+# Save the workbook to a file
+saveWorkbook(wb, file = "./figs/AMJStats.xlsx", overwrite = TRUE)
+
+
 
 # merge top years into fireClim DF
 topYears$topX<-"Extreme"
@@ -549,7 +584,7 @@ p<-ggplot(data=subset(temp,var %in% c("SPI-3","VPD-max")), #"tdmeanZ","tmaxZ"
   geom_text(data=subset(wTest,var %in% c("SPI-3","VPD-max")), #"tdmeanZ","tmaxZ"
             aes(as.factor(seq),3.5,label=sig), position = position_dodge(width = 0.6), size=10)
 
-save_plot("./figs/F4_boxPlots.png", p, base_height = 5.5, base_aspect_ratio = 1.75, bg = "white")
+save_plot("./figs/F4_boxPlots.png", p, base_height = 5, base_aspect_ratio = 1.75, bg = "white")
 
 tempX<-subset(temp,var %in% c("SPI-3","VPD-max"))
 tempX<-tempX %>% group_by(groupVeg,seq,fireSeas,topX,var) %>%
