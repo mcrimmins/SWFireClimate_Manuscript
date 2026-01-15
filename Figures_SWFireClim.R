@@ -358,6 +358,44 @@ mean(temp2$nFires)
 mean(temp2$totAc)
 mean(temp2$ratio)  
 
+#### FOR FACTSHEET
+# separate plots for each var
+
+library(ggplot2)
+library(patchwork) # For combining plots
+
+# 1. Create a base function to save repetition (Optional but cleaner)
+create_plot <- function(data_subset) {
+  ggplot(data_subset, aes(year, value)) +
+    geom_bar(stat="identity", color="grey28", fill="grey50") +
+    geom_text(aes(x=Inf, y=Inf, label=sig), color="red", size=5, hjust=1.75, vjust=1.75) +
+    geom_smooth(method="lm", se=FALSE) +
+    facet_wrap(~GROUPVEG, nrow=1, scales="free_x") + # Now faceting only by Vegetation
+    theme_bw() +
+    theme(axis.title.y = element_blank())
+}
+
+# 2. Generate the three separate plots
+p1 <- create_plot(subset(temp2, var == "Total Area Burned (ha)" & GROUPVEG %in% c("Conifer","Grassland","Shrubland","All")))
+p2 <- create_plot(subset(temp2, var == "Number of Fires" & GROUPVEG %in% c("Conifer","Grassland","Shrubland","All")))
+p3 <- create_plot(subset(temp2, var == "Avg Fire Size (ha)" & GROUPVEG %in% c("Conifer","Grassland","Shrubland","All")))
+
+# 3. Stack them (patchwork magic)
+#p1 / p2 / p3
+
+# Define a common set of arguments for consistency
+save_args <- list(width = 10, height = 4, dpi = 300)
+
+# Save the individual plots
+ggsave("./figs/Total_Area_Burned.png", plot = p1, width = save_args$width, height = save_args$height, dpi = save_args$dpi)
+ggsave("./figs/Number_of_Fires.png",   plot = p2, width = save_args$width, height = save_args$height, dpi = save_args$dpi)
+ggsave("./figs/Avg_Fire_Size.png",    plot = p3, width = save_args$width, height = save_args$height, dpi = save_args$dpi)
+
+
+######
+
+
+
 ##### FIG 2 --- annual time series
 # annual total fire ac and climate
 temp<-subset(temp5, GROUPVEG=="All" & var=="totAc")
@@ -413,6 +451,108 @@ PerformanceAnalytics::chart.Correlation(corrMat,
                                         histogram = TRUE, pch=19)
 
 #####  
+
+##### alternate fig 2 with grouped bar chart -----
+
+temp<-subset(temp5, GROUPVEG=="All" & var=="totAc")
+temp$logAc<-log(temp$value)
+tempClim<-subset(anoms[,c("month","year","spi12","tmeanZ12","vpdmaxZ12")], month==12)
+colnames(tempClim)[3:5]<-c("SPI-12","Temp-Z","VPDmax-Z")
+temp<-merge(temp,tempClim, by="year")  
+tempClim<-temp[,c("year","SPI-12","Temp-Z","VPDmax-Z")]
+#summary(tempClim)
+tempClim<-tempClim %>% pivot_longer(cols=`SPI-12`:`VPDmax-Z`, names_to="var",values_to="values")  
+tempClim<-subset(tempClim,var %in% c("VPDmax-Z","SPI-12"))
+
+temp<-subset(temp5, GROUPVEG %in% c("Conifer","Grassland","Shrubland") & var=="totAc")
+# Start from your tibble (I'll assume it's named `area`)
+# Filter only for rows where `var == "totAc"` (already the case here)
+area_log_scaled <- temp %>%
+  filter(var == "totAc") %>%
+  group_by(year) %>%
+  mutate(
+    total = sum(value),                      # Total area burned for each year
+    prop = value / total,                    # Proportion by group
+    log_total = log(total),                  # Log-transformed total
+    log_scaled = prop * log_total            # Scaled log value for stacking
+  )
+
+# set chart limits
+ymin<-0
+ymax<-15
+
+# Rescale function to align 0 Z-score to midpoint of log area range
+rescale_z <- function(z, ymin, ymax) {
+  mid <- (ymax + ymin) / 2
+  scale <- (ymax - ymin) / (2 * max(abs(z)))  # symmetrical scaling
+  return(mid + z * scale)
+}
+
+# Apply to tempClim
+z_limits <- max(abs(tempClim$values))
+tempClim_rescaled <- tempClim %>%
+  mutate(rescaled = rescale_z(values, ymin = ymin, ymax = ymax))
+
+mid <- (ymax + ymin) / 2
+z_limits <- max(abs(tempClim$values))
+scale_factor <- 2 * z_limits / (ymax - ymin)
+hline_yintercept <- mid + 0 * scale_factor
+
+
+ggplot() +
+  geom_bar(
+    data = area_log_scaled,
+    aes(x = year, y = log_scaled, fill = GROUPVEG),
+    stat = "identity"
+  ) +
+  # Rescaled climate lines
+  geom_line(
+    data = tempClim_rescaled,
+    aes(x = year, y = rescaled, color = var),
+    size = 1
+  ) +
+  geom_smooth(
+    data = tempClim_rescaled,
+    aes(x = year, y = rescaled, color = var),
+    method = "lm", se = FALSE, linetype = "solid"
+  ) +
+  
+  scale_y_continuous(
+    name = "Area Burned log(ha)",
+    #limits = c(ymin, ymax),
+    sec.axis = sec_axis(
+      transform = ~ (. - mid) * scale_factor,
+      name = "Z-score"
+    )
+  )+
+  
+  #scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(
+    values = c(
+      "Conifer" = "grey85",     # light grey
+      "Grassland" = "grey65",   # medium grey
+      "Shrubland" = "grey50"    # dark grey
+    ), name=""
+  )+
+  scale_color_manual(values = c("SPI-12" = "#1b9e77", "VPDmax-Z" = "#d95f02"), name="") +
+  geom_hline(yintercept = hline_yintercept, linetype = "dashed")+
+  labs(
+    x = "Year",
+    fill = "Vegetation Type",
+    color = "Climate Variable"
+  ) +
+  scale_x_continuous(breaks=seq(1984,2020, by=4))+
+  
+  theme_classic() +
+  theme(
+    axis.title.y.right = element_text(color = "black"),
+    legend.position = "bottom"
+  )
+
+save_plot("./figs/F2_annTimeSeries_withGroupedBars.png", p, base_height = 4, base_aspect_ratio = 1.75, bg = "white")
+
+#####
+
 
 
 ##### FIG 4 --- antecendant climate
